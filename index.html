@@ -29,8 +29,11 @@ header{flex-shrink:0;background:rgba(15,15,15,0.95);backdrop-filter:blur(12px);b
 .steps-track{display:flex;height:100%;transition:transform .4s cubic-bezier(.4,0,.2,1);}
 .step{min-width:100%;height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px 80px;}
 .bottom-nav{display:none;}
-.btn-back{height:34px;padding:0 12px;border-radius:var(--radius);border:1px solid var(--border2);background:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text2);}
-.btn-next{height:34px;padding:0 16px;border-radius:var(--radius);border:none;background:var(--accent);color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px;}
+.btn-back{width:36px;height:36px;border-radius:50%;border:1px solid var(--border2);background:none;cursor:pointer;font-size:18px;color:var(--text2);display:flex;align-items:center;justify-content:center;transition:background .12s;}
+.btn-back:hover{background:var(--bg3);}
+.btn-back:disabled{opacity:0.3;cursor:default;}
+.btn-next{width:36px;height:36px;border-radius:50%;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background .12s;}
+.btn-next:hover{background:#3C3489;}
 .btn-next:disabled{background:var(--bg3);color:var(--text3);cursor:default;}
 .mode-tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--radius);padding:3px;margin-bottom:16px;}
 .mode-tab{flex:1;padding:8px 0;font-size:13px;font-weight:500;text-align:center;border:none;background:none;cursor:pointer;border-radius:8px;color:var(--text2);font-family:'DM Sans',sans-serif;transition:background .15s,color .15s;}
@@ -139,8 +142,8 @@ input[type=file]{display:none;}
       <div class="logo"><div class="logo-icon">🎞</div>Carrusel AB</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="step-label">Paso <span id="stepNum">1</span> de 3</span>
-        <button class="btn-back hidden" id="btnBack" onclick="goStep(currentStep-1)">← Atrás</button>
-        <button class="btn-next" id="btnNext" disabled onclick="goStep(currentStep+1)">Siguiente →</button>
+        <button class="btn-back" id="btnBack" disabled onclick="goStep(currentStep-1)">‹</button>
+        <button class="btn-next" id="btnNext" disabled onclick="goStep(currentStep+1)">›</button>
       </div>
     </div>
   </header>
@@ -287,7 +290,7 @@ input[type=file]{display:none;}
         </div>
         <div class="tip" id="previewTip">Las fotos se descargan numeradas — subílas así a Instagram</div>
         <button class="restart-btn" onclick="restartApp()">← Hacer otro carrusel</button>
-        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px;">v1.3 · <a href="https://instagram.com/carruselab" style="color:var(--accent2);text-decoration:none;">@carruselab</a></p>
+        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px;">v1.4 · <a href="https://instagram.com/carruselab" style="color:var(--accent2);text-decoration:none;">@carruselab</a></p>
       </div>
 
     </div>
@@ -313,7 +316,7 @@ function goStep(n){
   document.getElementById('stepsTrack').style.transform=`translateX(-${(n-1)*100}%)`;
   document.getElementById('progressFill').style.width=(n/3*100)+'%';
   document.getElementById('stepNum').textContent=n;
-  document.getElementById('btnBack').classList.toggle('hidden',n===1);
+  document.getElementById('btnBack').disabled=(n===1);
   const btnNext=document.getElementById('btnNext');
   btnNext.style.display=n===3?'none':'flex';
   if(n===2)renderStep2();
@@ -327,11 +330,26 @@ function checkStep1Ready(){
 function restartApp(){
   sImg=null;sState={offX:0,offY:0,scale:1,imgW:0,imgH:0,cropW:0,cropH:0};sIdx=0;sN=3;
   mImages=[];mIdx=0;mEditIdx=null;mPanAttached=false;
-  document.getElementById('splitFile').value='';document.getElementById('multiFile').value='';
-  document.getElementById('sortGrid').innerHTML='';document.getElementById('sortGridEditor').innerHTML='';
-  document.getElementById('splitUploadTitle').textContent='Subí una foto para dividir';
-  document.getElementById('splitUpload').innerHTML='<div class="upload-icon">✂️</div><div class="upload-title" id="splitUploadTitle">Subí una foto para dividir</div><div class="upload-sub">Tocá para seleccionar · JPG, PNG, HEIC</div>';
-  document.getElementById('splitUpload').addEventListener('click',()=>document.getElementById('splitFile').click());
+  // Reset file inputs
+  const sf=document.getElementById('splitFile');sf.value='';
+  const mf=document.getElementById('multiFile');mf.value='';
+  // Reset sort grids
+  document.getElementById('sortGrid').innerHTML='';
+  document.getElementById('sortGridEditor').innerHTML='';
+  document.getElementById('multiCount').textContent='';
+  document.getElementById('mHint').textContent='';
+  document.getElementById('multiUploadTitle').textContent='Subí tus fotos';
+  // Rebuild splitUpload zone completely
+  const zu=document.getElementById('splitUpload');
+  zu.innerHTML='<div class="upload-icon">✂️</div><div class="upload-title">Subí una foto para dividir</div><div class="upload-sub">Tocá para seleccionar · JPG, PNG, HEIC</div>';
+  zu.className='upload-zone';
+  // Re-attach event listeners (clone to remove old ones)
+  const zuNew=zu.cloneNode(true);
+  zu.parentNode.replaceChild(zuNew,zu);
+  zuNew.addEventListener('click',()=>document.getElementById('splitFile').click());
+  zuNew.addEventListener('dragover',e=>{e.preventDefault();zuNew.classList.add('dragover');});
+  zuNew.addEventListener('dragleave',()=>zuNew.classList.remove('dragover'));
+  zuNew.addEventListener('drop',e=>{e.preventDefault();zuNew.classList.remove('dragover');if(e.dataTransfer.files[0])loadSImg(e.dataTransfer.files[0]);});
   checkStep1Ready();goStep(1);
 }
 
