@@ -1,4 +1,4 @@
-const VERSION = 'carrusel-ab-v0.5';
+const VERSION = 'carrusel-ab-v0.6';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
