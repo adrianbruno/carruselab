@@ -16,7 +16,7 @@
 :root{--bg:#0f0f0f;--bg2:#1a1a1a;--bg3:#242424;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);--text:#f0f0f0;--text2:#888;--text3:#444;--accent:#534AB7;--accent2:#7F77DD;--accent-bg:rgba(83,74,183,0.12);--green:#1D9E75;--radius:10px;--radius-lg:16px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;overflow:hidden;}
-.shell{display:flex;flex-direction:column;height:100svh;height:100vh;}
+.shell{display:flex;flex-direction:column;height:100svh;height:100dvh;height:100vh;}
 header{flex-shrink:0;background:rgba(15,15,15,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 16px;z-index:50;}
 .header-inner{height:50px;display:flex;align-items:center;justify-content:space-between;}
 .logo{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;}
@@ -28,7 +28,7 @@ header{flex-shrink:0;background:rgba(15,15,15,0.95);backdrop-filter:blur(12px);b
 .steps-wrap{flex:1;overflow:hidden;position:relative;}
 .steps-track{display:flex;height:100%;transition:transform .4s cubic-bezier(.4,0,.2,1);}
 .step{min-width:100%;height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px 80px;}
-.bottom-nav{flex-shrink:0;background:rgba(15,15,15,0.97);border-top:1px solid var(--border);padding:10px 16px;display:flex;gap:10px;align-items:center;z-index:50;}
+.bottom-nav{flex-shrink:0;background:rgba(15,15,15,0.97);border-top:1px solid var(--border);padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px)) 16px;display:flex;gap:10px;align-items:center;z-index:50;position:relative;}
 .btn-back{flex:0 0 auto;height:42px;padding:0 16px;border-radius:var(--radius);border:1px solid var(--border2);background:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text2);transition:background .12s;}
 .btn-back:hover{background:var(--bg3);}
 .btn-next{flex:1;height:42px;border-radius:var(--radius);border:none;background:var(--accent);color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;transition:background .12s;display:flex;align-items:center;justify-content:center;gap:6px;}
@@ -285,7 +285,7 @@ input[type=file]{display:none;}
         </div>
         <div class="tip" id="previewTip">Las fotos se descargan numeradas — subílas así a Instagram</div>
         <button class="restart-btn" onclick="restartApp()">← Hacer otro carrusel</button>
-        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px;">v1.1 · <a href="https://instagram.com/carruselab" style="color:var(--accent2);text-decoration:none;">@carruselab</a></p>
+        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px;">v1.2 · <a href="https://instagram.com/carruselab" style="color:var(--accent2);text-decoration:none;">@carruselab</a></p>
       </div>
 
     </div>
@@ -460,7 +460,7 @@ document.getElementById('splitFile').addEventListener('change',e=>{if(e.target.f
 function loadSImg(file){
   resizeImage(file,img=>{
     sImg=img;initSplit();checkStep1Ready();
-    document.getElementById('splitUpload').innerHTML='<div style="padding:12px;font-size:13px;color:var(--green);font-weight:500;text-align:center;">✓ Foto lista — tocá Siguiente para editar</div>';
+    document.getElementById('splitUpload').innerHTML='<div style="padding:12px 8px;text-align:center;"><div style="font-size:13px;color:var(--green);font-weight:500;margin-bottom:8px;">✓ Foto lista</div><button onclick="event.stopPropagation();document.getElementById(\'splitFile\').click()" style="font-size:12px;color:var(--text2);background:none;border:1px solid var(--border2);border-radius:8px;padding:5px 14px;cursor:pointer;font-family:DM Sans,sans-serif;">Cambiar foto</button></div>';
     document.getElementById('splitUpload').addEventListener('click',()=>document.getElementById('splitFile').click());
   });
 }
@@ -677,8 +677,17 @@ function renderStep3(){
   document.getElementById('btnDownload').onclick=()=>downloadAll(canvases);
   document.getElementById('btnShare').onclick=()=>shareFiles(canvases,'carrusel');
 }
-document.getElementById('pPrev').addEventListener('click',()=>{if(pIdx>0){pIdx--;updatePNav();}});
-document.getElementById('pNext').addEventListener('click',()=>{const t=document.getElementById('previewTrack').children.length;if(pIdx<t-1){pIdx++;updatePNav();}});
+document.getElementById('pPrev').addEventListener('click',()=>{if(pIdx>0){pIdx--;updatePNav();syncEditorToPreview();}});
+document.getElementById('pNext').addEventListener('click',()=>{const t=document.getElementById('previewTrack').children.length;if(pIdx<t-1){pIdx++;updatePNav();syncEditorToPreview();}});
+function syncEditorToPreview(){
+  if(currentMode==='split'){
+    sIdx=pIdx;
+    if(currentStep===2)drawSplit();
+  } else if(currentMode==='multi'){
+    mIdx=pIdx;
+    if(currentStep===2){openMCrop(pIdx);document.getElementById('step2').scrollTop=0;}
+  }
+}
 function updatePNav(){
   const t=document.getElementById('previewTrack').children.length;
   document.getElementById('previewTrack').style.transform=`translateX(-${pIdx*100}%)`;
