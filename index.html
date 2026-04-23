@@ -441,9 +441,6 @@ input[type=file]{display:none;}
 <div id="toast" style="opacity:0;"></div>
 
 <script>
-JSEOF
-echo "HTML written up to JS placeholder"
-wc -l /home/claude/carrusel-ab/index.html
 // PWA
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBanner').style.display='flex';});
