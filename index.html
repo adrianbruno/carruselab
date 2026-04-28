@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1104,7 +1103,8 @@ const toolConfig={
 function selectTool(tool){
   currentTool=tool;
   document.querySelectorAll('.edit-tool-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('tool'+tool.charAt(0).toUpperCase()+tool.slice(1)).classList.add('active');
+  const btn=document.getElementById('tool'+tool.charAt(0).toUpperCase()+tool.slice(1));
+  if(btn)btn.classList.add('active');
   const cfg=toolConfig[tool];
   document.getElementById('editLabel').textContent=cfg.label;
   const sl=document.getElementById('pvZoomSlider');
