@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -416,6 +417,10 @@ input[type=file]{display:none;}
                 <span class="tool-icon">✦</span>
                 <span class="tool-label">Nitidez</span>
               </button>
+              <button class="edit-tool-btn" id="toolBg" onclick="selectTool('bg')">
+                <span class="tool-icon">✂️</span>
+                <span class="tool-label">Fondo</span>
+              </button>
             </div>
             <!-- Tool slider panel -->
             <div class="edit-panel show" id="editPanel">
@@ -425,6 +430,14 @@ input[type=file]{display:none;}
                 <span class="edit-panel-val" id="pvZoomVal">100%</span>
               </div>
               <button class="edit-reset" onclick="resetCurrentTool()">↺ Resetear</button>
+            </div>
+            <!-- BG removal panel -->
+            <div class="edit-panel" id="bgPanel">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button id="btnRemoveBg" style="flex:1;height:36px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--pink),var(--purple));color:#fff;font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;" onclick="removeBgAction()">✨ Quitar fondo</button>
+                <button id="btnRestoreBg" style="flex:1;height:36px;border-radius:10px;border:1.5px solid var(--border2);background:none;color:var(--text2);font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;" onclick="restoreBgAction()">↺ Restaurar</button>
+              </div>
+              <div id="bgStatus" style="font-size:11px;color:var(--text2);text-align:center;margin-top:6px;font-weight:700;min-height:16px;"></div>
             </div>
             <div class="hint" style="margin-top:4px;">Arrastrá la imagen para moverla</div>
           </div>
@@ -437,7 +450,7 @@ input[type=file]{display:none;}
         </div>
         <div class="tip" id="previewTip">Las fotos se descargan numeradas en orden — subílas así a Instagram 🚀</div>
         <button class="restart-btn" onclick="restartApp()">← Hacer otro carrusel</button>
-        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;font-weight:600;">v2.4 · <a href="https://instagram.com/carruselab" style="color:var(--pink-light);text-decoration:none;">@carruselab</a></p>
+        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;font-weight:600;">v2.5 · <a href="https://instagram.com/carruselab" style="color:var(--pink-light);text-decoration:none;">@carruselab</a></p>
       </div>
 
     </div>
@@ -520,7 +533,7 @@ function restartApp(){
   zuNew.addEventListener('dragover',e=>{e.preventDefault();zuNew.classList.add('dragover');});
   zuNew.addEventListener('dragleave',()=>zuNew.classList.remove('dragover'));
   zuNew.addEventListener('drop',e=>{e.preventDefault();zuNew.classList.remove('dragover');if(e.dataTransfer.files[0])loadSImg(e.dataTransfer.files[0]);});
-  editAdj={bright:0,contrast:0,sat:0,sharp:0};currentTool='zoom';
+  editAdj={bright:0,contrast:0,sat:0,sharp:0};currentTool='zoom';resetBgState();
   checkStep1Ready();goStep(1);
 }
 
@@ -858,7 +871,7 @@ let previewCanvases=[];
 function renderStep2(){
   updateViewportAspect();
   pIdx=0;
-  editAdj={bright:0,contrast:0,sat:0,sharp:0};
+  editAdj={bright:0,contrast:0,sat:0,sharp:0};resetBgState();
   if(typeof selectTool==='function')setTimeout(()=>selectTool('zoom'),100);
   // Build canvases
   if(currentMode==='split'){
@@ -1093,11 +1106,12 @@ let editAdj={bright:0,contrast:0,sat:0,sharp:0};
 let currentTool='zoom';
 
 const toolConfig={
-  zoom: {label:'Zoom',min:10,max:300,step:1,default:100,unit:'%'},
-  bright:{label:'Brillo',min:-100,max:100,step:1,default:0,unit:''},
+  zoom:    {label:'Zoom',min:10,max:300,step:1,default:100,unit:'%'},
+  bright:  {label:'Brillo',min:-100,max:100,step:1,default:0,unit:''},
   contrast:{label:'Contraste',min:-100,max:100,step:1,default:0,unit:''},
-  sat:{label:'Color',min:-100,max:100,step:1,default:0,unit:''},
-  sharp:{label:'Nitidez',min:0,max:10,step:1,default:0,unit:''}
+  sat:     {label:'Color',min:-100,max:100,step:1,default:0,unit:''},
+  sharp:   {label:'Nitidez',min:0,max:10,step:1,default:0,unit:''},
+  bg:      {label:'Fondo',min:0,max:0,step:1,default:0,unit:''}
 };
 
 function selectTool(tool){
@@ -1106,6 +1120,12 @@ function selectTool(tool){
   const btn=document.getElementById('tool'+tool.charAt(0).toUpperCase()+tool.slice(1));
   if(btn)btn.classList.add('active');
   const cfg=toolConfig[tool];
+  // Show/hide panels
+  const ep=document.getElementById('editPanel');
+  const bp=document.getElementById('bgPanel');
+  if(ep)ep.classList.toggle('show',tool!=='bg');
+  if(bp)bp.classList.toggle('show',tool==='bg');
+  if(tool==='bg')return;
   document.getElementById('editLabel').textContent=cfg.label;
   const sl=document.getElementById('pvZoomSlider');
   sl.min=cfg.min;sl.max=cfg.max;sl.step=cfg.step;
@@ -1165,6 +1185,103 @@ function applyImageAdjustments(){
   // Store filter for export
   window._currentFilter={brightness,contrast,saturate,sharp:sh};
 }
+
+// ── BACKGROUND REMOVAL ──
+let originalCanvases={}; // backup before bg removal
+
+function getActiveSlideCanvas(){
+  const slides=document.querySelectorAll('#previewTrack .c-slide canvas');
+  return slides[pIdx]||null;
+}
+
+async function removeBgAction(){
+  const status=document.getElementById('bgStatus');
+  const btn=document.getElementById('btnRemoveBg');
+  if(!previewCanvases[pIdx]){status.textContent='No hay imagen';return;}
+
+  // Backup original
+  if(!originalCanvases[pIdx]){
+    const orig=document.createElement('canvas');
+    orig.width=previewCanvases[pIdx].width;orig.height=previewCanvases[pIdx].height;
+    orig.getContext('2d').drawImage(previewCanvases[pIdx],0,0);
+    originalCanvases[pIdx]=orig;
+  }
+
+  btn.disabled=true;
+  status.textContent='⏳ Cargando IA... (primera vez ~40MB)';
+
+  try{
+    // Convert canvas to blob
+    const src=previewCanvases[pIdx];
+    const blob=await new Promise(res=>src.toBlob(res,'image/png'));
+
+    status.textContent='🧠 Procesando...';
+
+    // Run background removal
+    const imglyBGR=window.BackgroundRemoval||window.imglyBackgroundRemoval;
+    if(!imglyBGR){
+      status.textContent='❌ Librería no disponible';
+      btn.disabled=false;return;
+    }
+
+    const resultBlob=await imglyBGR(blob,{
+      publicPath:`https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/`,
+      debug:false,
+      output:{quality:0.9,format:'image/png'}
+    });
+
+    // Draw result back
+    const url=URL.createObjectURL(resultBlob);
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas');
+      c.width=src.width;c.height=src.height;
+      const ctx=c.getContext('2d');
+      ctx.clearRect(0,0,c.width,c.height);
+      ctx.drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      previewCanvases[pIdx]=c;
+      // Update preview slide
+      const slides=document.querySelectorAll('#previewTrack .c-slide canvas');
+      if(slides[pIdx]){
+        slides[pIdx].width=c.width;slides[pIdx].height=c.height;
+        slides[pIdx].getContext('2d').clearRect(0,0,c.width,c.height);
+        slides[pIdx].getContext('2d').drawImage(c,0,0);
+      }
+      renderThumbStrip();
+      status.textContent='✅ ¡Fondo eliminado!';
+      btn.disabled=false;
+    };
+    img.onerror=()=>{status.textContent='❌ Error al procesar';btn.disabled=false;};
+    img.src=url;
+
+  }catch(err){
+    console.error(err);
+    status.textContent='❌ Error: '+err.message;
+    btn.disabled=false;
+  }
+}
+
+function restoreBgAction(){
+  if(!originalCanvases[pIdx]){
+    document.getElementById('bgStatus').textContent='No hay original guardado';
+    return;
+  }
+  const orig=originalCanvases[pIdx];
+  previewCanvases[pIdx]=orig;
+  const slides=document.querySelectorAll('#previewTrack .c-slide canvas');
+  if(slides[pIdx]){
+    slides[pIdx].width=orig.width;slides[pIdx].height=orig.height;
+    slides[pIdx].getContext('2d').drawImage(orig,0,0);
+  }
+  originalCanvases[pIdx]=null;
+  renderThumbStrip();
+  document.getElementById('bgStatus').textContent='↺ Original restaurado';
+}
+
+// Reset bg backups on new image
+// (called in restartApp and renderStep2)
+function resetBgState(){originalCanvases={};}
 
 // Bake adjustments into canvases before export
 function bakeAdjustments(canvases){
