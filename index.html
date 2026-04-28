@@ -877,8 +877,8 @@ function renderStep2(){
     document.getElementById('btnShare').classList.add('show');
     document.getElementById('previewTip').textContent='Compartí directo a Instagram o descargá las fotos';
   }
-  document.getElementById('btnDownload').onclick=()=>downloadAll(previewCanvases);
-  document.getElementById('btnShare').onclick=()=>shareFiles(previewCanvases,'carrusel');
+  document.getElementById('btnDownload').onclick=()=>downloadAll(bakeAdjustments(previewCanvases));
+  document.getElementById('btnShare').onclick=()=>shareFiles(bakeAdjustments(previewCanvases),'carrusel');
   // Attach pan/zoom to preview
   setupPreviewPanZoom();
 }
@@ -1166,49 +1166,27 @@ function applyImageAdjustments(){
   window._currentFilter={brightness,contrast,saturate,sharp:sh};
 }
 
-// Override downloadAll to bake in adjustments
-const _origDownloadAll=downloadAll;
-function downloadAll(canvases){
+// Bake adjustments into canvases before export
+function bakeAdjustments(canvases){
   const f=window._currentFilter;
   if(!f||(!editAdj.bright&&!editAdj.contrast&&!editAdj.sat&&!editAdj.sharp)){
-    _origDownloadAll(canvases);return;
+    return canvases;
   }
-  // Bake filter into canvas before export
-  const baked=canvases.map(src=>{
+  return canvases.map(src=>{
     const c=document.createElement('canvas');c.width=src.width;c.height=src.height;
     const ctx=c.getContext('2d');
     ctx.filter=`brightness(${f.brightness}) contrast(${f.contrast}) saturate(${f.saturate})`;
     ctx.drawImage(src,0,0);
     ctx.filter='none';
-    // Sharpen with convolution if needed
     if(f.sharp>0){
-      const amount=f.sharp*0.1;
       const id=ctx.getImageData(0,0,c.width,c.height);
-      sharpenImageData(id,amount);
+      sharpenImageData(id,f.sharp*0.1);
       ctx.putImageData(id,0,0);
     }
     return c;
   });
-  _origDownloadAll(baked);
 }
 
-// Same override for shareFiles
-const _origShareFiles=shareFiles;
-async function shareFiles(canvases,prefix){
-  const f=window._currentFilter;
-  if(!f||(!editAdj.bright&&!editAdj.contrast&&!editAdj.sat&&!editAdj.sharp)){
-    await _origShareFiles(canvases,prefix);return;
-  }
-  const baked=canvases.map(src=>{
-    const c=document.createElement('canvas');c.width=src.width;c.height=src.height;
-    const ctx=c.getContext('2d');
-    ctx.filter=`brightness(${f.brightness}) contrast(${f.contrast}) saturate(${f.saturate})`;
-    ctx.drawImage(src,0,0);ctx.filter='none';
-    if(f.sharp>0){const id=ctx.getImageData(0,0,c.width,c.height);sharpenImageData(id,f.sharp*0.1);ctx.putImageData(id,0,0);}
-    return c;
-  });
-  await _origShareFiles(baked,prefix);
-}
 
 function sharpenImageData(id,amount){
   const d=id.data,w=id.width,h=id.height;
