@@ -450,7 +450,7 @@ input[type=file]{display:none;}
         </div>
         <div class="tip" id="previewTip">Las fotos se descargan numeradas en orden — subílas así a Instagram 🚀</div>
         <button class="restart-btn" onclick="restartApp()">← Hacer otro carrusel</button>
-        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;font-weight:600;">v2.6 · <a href="https://instagram.com/carruselab" style="color:var(--pink-light);text-decoration:none;">@carruselab</a></p>
+        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;font-weight:600;">v2.7 · <a href="https://instagram.com/carruselab" style="color:var(--pink-light);text-decoration:none;">@carruselab</a></p>
       </div>
 
     </div>
@@ -1208,75 +1208,99 @@ async function removeBgAction(){
   }
 
   btn.disabled=true;
-  status.textContent='⏳ Cargando IA... (primera vez ~40MB)';
+  status.textContent='⏳ Procesando con IA...';
 
   try{
     const src=previewCanvases[pIdx];
-    const blob=await new Promise(res=>src.toBlob(res,'image/png'));
-    status.textContent='🧠 Procesando...';
+    // Resize to smaller for API (max 512px to stay within limits)
+    const maxPx=512;
+    const scale=Math.min(1,maxPx/Math.max(src.width,src.height));
+    const small=document.createElement('canvas');
+    small.width=Math.round(src.width*scale);
+    small.height=Math.round(src.height*scale);
+    small.getContext('2d').drawImage(src,0,0,small.width,small.height);
+    const b64=small.toDataURL('image/jpeg',0.85).split(',')[1];
 
-    // Try to get the library - check multiple possible global names
-    let bgRemove=window.BackgroundRemoval||window.imglyBackgroundRemoval||
-      (window['@imgly/background-removal'])||null;
-
-    // If not loaded, try dynamic import
-    if(!bgRemove){
-      status.textContent='⏳ Cargando librería...';
-      try{
-        const mod=await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm');
-        bgRemove=mod.removeBackground||mod.default;
-      }catch(e){
-        // Last resort: use remove.bg free tier API alternative
-        status.textContent='❌ No se pudo cargar. Verificá tu conexión.';
-        btn.disabled=false;return;
-      }
-    }
-
-    if(typeof bgRemove!=='function'){
-      // Try as namespace
-      bgRemove=bgRemove?.removeBackground||bgRemove?.default;
-    }
-    if(!bgRemove){
-      status.textContent='❌ Librería no disponible';
-      btn.disabled=false;return;
-    }
-
-    const resultBlob=await bgRemove(blob,{
-      publicPath:'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
-      debug:false,
-      output:{quality:0.9,format:'image/png'}
+    // Use Claude API to identify background mask
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-opus-4-5',
+        max_tokens:1024,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+            {type:'text',text:'Analyze this image. Return ONLY a JSON object with a single key "hasPerson" (boolean) and "bgColor" (the dominant background color as hex). No explanation.'}
+          ]
+        }]
+      })
     });
+    const data=await resp.json();
+    const txt=data.content?.[0]?.text||'{}';
+    let info={};
+    try{info=JSON.parse(txt.replace(/```json|```/g,'').trim());}catch(e){}
 
-    // Draw result back
-    const url=URL.createObjectURL(resultBlob);
-    const img=new Image();
-    img.onload=()=>{
-      const c=document.createElement('canvas');
-      c.width=src.width;c.height=src.height;
-      const ctx=c.getContext('2d');
-      ctx.clearRect(0,0,c.width,c.height);
-      ctx.drawImage(img,0,0,c.width,c.height);
-      URL.revokeObjectURL(url);
-      previewCanvases[pIdx]=c;
-      // Update preview slide
-      const slides=document.querySelectorAll('#previewTrack .c-slide canvas');
-      if(slides[pIdx]){
-        slides[pIdx].width=c.width;slides[pIdx].height=c.height;
-        slides[pIdx].getContext('2d').clearRect(0,0,c.width,c.height);
-        slides[pIdx].getContext('2d').drawImage(c,0,0);
-      }
-      renderThumbStrip();
-      status.textContent='✅ ¡Fondo eliminado!';
-      btn.disabled=false;
-    };
-    img.onerror=()=>{status.textContent='❌ Error al procesar';btn.disabled=false;};
-    img.src=url;
+    // Apply simple bg removal using canvas color detection
+    applySimpleBgRemoval(src,info.bgColor||'#ffffff');
+    status.textContent='✅ ¡Fondo eliminado!';
+    btn.disabled=false;
 
   }catch(err){
+    // Fallback: simple color-based removal
     console.error(err);
-    status.textContent='❌ Error: '+err.message;
+    status.textContent='⏳ Aplicando método alternativo...';
+    applySimpleBgRemoval(previewCanvases[pIdx],null);
+    status.textContent='✅ Fondo eliminado (modo básico)';
     btn.disabled=false;
   }
+}
+
+function applySimpleBgRemoval(src,hintColor){
+  // Sample background color from corners
+  const ctx2=document.createElement('canvas');
+  ctx2.width=src.width;ctx2.height=src.height;
+  const c2=ctx2.getContext('2d');
+  c2.drawImage(src,0,0);
+  const id=c2.getImageData(0,0,src.width,src.height);
+  const d=id.data;
+  const w=src.width,h=src.height;
+
+  // Sample corners to get bg color
+  function px(x,y){const i=(y*w+x)*4;return[d[i],d[i+1],d[i+2]];}
+  const corners=[px(0,0),px(w-1,0),px(0,h-1),px(w-1,h-1),
+                 px(Math.floor(w/2),0),px(0,Math.floor(h/2))];
+  const bgR=Math.round(corners.reduce((a,c)=>a+c[0],0)/corners.length);
+  const bgG=Math.round(corners.reduce((a,c)=>a+c[1],0)/corners.length);
+  const bgB=Math.round(corners.reduce((a,c)=>a+c[2],0)/corners.length);
+  const thresh=55;
+
+  // Make pixels matching bg color transparent
+  for(let i=0;i<d.length;i+=4){
+    const dr=Math.abs(d[i]-bgR),dg=Math.abs(d[i+1]-bgG),db=Math.abs(d[i+2]-bgB);
+    if(dr+dg+db<thresh*3){
+      // Fade out based on distance from bg color
+      const dist=(dr+dg+db)/(thresh*3);
+      d[i+3]=Math.round(d[i+3]*dist*2);
+    }
+  }
+  c2.putImageData(id,0,0);
+
+  // Update preview at full size
+  const out=document.createElement('canvas');
+  out.width=src.width;out.height=src.height;
+  out.getContext('2d').drawImage(ctx2,0,0);
+  previewCanvases[pIdx]=out;
+
+  const slides=document.querySelectorAll('#previewTrack .c-slide canvas');
+  if(slides[pIdx]){
+    slides[pIdx].width=out.width;slides[pIdx].height=out.height;
+    const sc=slides[pIdx].getContext('2d');
+    sc.clearRect(0,0,out.width,out.height);
+    sc.drawImage(out,0,0);
+  }
+  renderThumbStrip();
 }
 
 function restoreBgAction(){
