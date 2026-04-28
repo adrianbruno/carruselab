@@ -395,7 +395,7 @@ input[type=file]{display:none;}
         </div>
         <div class="tip" id="previewTip">Las fotos se descargan numeradas en orden — subílas así a Instagram 🚀</div>
         <button class="restart-btn" onclick="restartApp()">← Hacer otro carrusel</button>
-        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;font-weight:600;">v2.1 · <a href="https://instagram.com/carruselab" style="color:var(--pink-light);text-decoration:none;">@carruselab</a></p>
+        <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;font-weight:600;">v2.2 · <a href="https://instagram.com/carruselab" style="color:var(--pink-light);text-decoration:none;">@carruselab</a></p>
       </div>
 
     </div>
@@ -638,12 +638,8 @@ function initSplit(){
   sCropCanvas.width=cW;sCropCanvas.height=cH;
 }
 function setupSplitEditor(){
-  const pw=sCropOuter.parentElement.offsetWidth||340;
-  const dW=Math.min(pw,sState.cropW),dH=Math.round(dW*(sState.cropH/sState.cropW));
-  sCropOuter.style.width=dW+'px';sCropOuter.style.height=dH+'px';
-  document.getElementById('sZoomSlider').value=100;document.getElementById('sZoomVal').textContent='100%';
+  // Always draw at full resolution regardless of DOM visibility
   drawSplit();
-  attachPanZoom(sCropOuter,sCropCanvas,()=>sState,(p)=>{Object.assign(sState,p);syncSZoom();},drawSplit);
 }
 function syncSZoom(){
   const fill=fillScale(sState.imgW,sState.imgH,sState.cropW,sState.cropH),mn=fitScale(sState.imgW,sState.imgH,sState.cropW,sState.cropH);
@@ -822,8 +818,11 @@ function renderStep2(){
   // Build canvases
   if(currentMode==='split'){
     if(!sImg)return;
-    if(sCropCanvas.width===0)setupSplitEditor();
-    previewCanvases=Array.from({length:sN},(_,i)=>sliceCanvas(sCropCanvas,i,getFmt().w,getFmt().h));
+    // Always re-draw at correct size before slicing
+    const f=getFmt();
+    sCropCanvas.width=sN*f.w;sCropCanvas.height=f.h;
+    drawSplit();
+    previewCanvases=Array.from({length:sN},(_,i)=>sliceCanvas(sCropCanvas,i,f.w,f.h));
   } else {
     previewCanvases=mImages.map(item=>thumbCanvas(item));
   }
@@ -833,8 +832,10 @@ function renderStep2(){
     document.getElementById('btnShare').classList.add('show');
     document.getElementById('previewTip').textContent='Compartí directo a Instagram o descargá las fotos';
   }
-  document.getElementById('btnDownload').onclick=()=>downloadAll(previewCanvases);
-  document.getElementById('btnShare').onclick=()=>shareFiles(previewCanvases,'carrusel');
+  // Init exportCanvases as copy of previewCanvases
+  exportCanvases=[...previewCanvases.map(c=>{const n=document.createElement('canvas');n.width=c.width;n.height=c.height;n.getContext('2d').drawImage(c,0,0);return n;})];
+  document.getElementById('btnDownload').onclick=()=>downloadAll(exportCanvases);
+  document.getElementById('btnShare').onclick=()=>shareFiles(exportCanvases,'carrusel');
   // Attach pan/zoom to preview
   setupPreviewPanZoom();
 }
@@ -904,11 +905,33 @@ function applyPreviewTransform(){
   if(!img)return;
   const z=pvZoom[pIdx]||1;
   const o=pvOff[pIdx]||{x:0,y:0};
+  // CSS transform for visual feedback (instant)
   img.style.transform=`scale(${z}) translate(${o.x/z}px,${o.y/z}px)`;
   img.style.transformOrigin='center center';
   document.getElementById('pvZoomVal').textContent=Math.round(z*100)+'%';
   document.getElementById('pvZoomSlider').value=Math.round(z*100);
+  // Update underlying canvas data for export
+  updateExportCanvas(pIdx);
 }
+
+function updateExportCanvas(i){
+  if(!previewCanvases[i])return;
+  const src=previewCanvases[i];
+  const z=pvZoom[i]||1;
+  const o=pvOff[i]||{x:0,y:0};
+  const c=document.createElement('canvas');
+  c.width=src.width;c.height=src.height;
+  const ctx=c.getContext('2d');
+  ctx.save();
+  ctx.translate(src.width/2+o.x,src.height/2+o.y);
+  ctx.scale(z,z);
+  ctx.drawImage(src,-src.width/2,-src.height/2);
+  ctx.restore();
+  exportCanvases[i]=c;
+}
+
+// exportCanvases holds the pan/zoom-adjusted versions for download
+let exportCanvases=[];
 
 function previewGoTo(i){
   pIdx=i;
